@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>fridge. — what's in your fridge?</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root {
+    --bg:#141210; --card:#1f1b17; --card2:#26211c; --line:#332c25;
+    --txt:#f3ecdf; --dim:#a89c8b; --accent:#ffb347; --good:#7fd48a; --bad:#e07a5f;
+  }
+  html,body { background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  body { min-height:100vh; }
+  .wrap { max-width:480px; margin:0 auto; padding:20px 16px 40px; }
+
+  header h1 { font-size:34px; letter-spacing:-1px; font-weight:800; }
+  header h1 .dot { color:var(--accent); }
+  header p { color:var(--dim); font-size:14px; margin-top:4px; }
+
+  .inputbox { margin-top:20px; display:flex; gap:8px; }
+  .inputbox input {
+    flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:14px; color:var(--txt); font-size:16px; outline:none;
+  }
+  .inputbox input:focus { border-color:var(--accent); }
+  .inputbox button {
+    background:var(--accent); color:#1a1208; border:none; border-radius:12px;
+    padding:0 18px; font-size:16px; font-weight:700; cursor:pointer;
+  }
+  .inputbox button:active { transform:scale(.97); }
+
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; min-height:0; }
+  .chip {
+    background:var(--card2); border:1px solid var(--line); border-radius:999px;
+    padding:6px 12px; font-size:14px; display:flex; align-items:center; gap:6px;
+  }
+  .chip button { background:none; border:none; color:var(--dim); font-size:15px; cursor:pointer; padding:0 2px; }
+  .chip button:active { color:var(--bad); }
+
+  .hint { color:var(--dim); font-size:12px; margin-top:10px; }
+
+  .results { margin-top:18px; display:flex; flex-direction:column; gap:10px; }
+  .card {
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; cursor:pointer; transition:transform .05s;
+  }
+  .card:active { transform:scale(.985); background:var(--card2); }
+  .card .top { display:flex; align-items:center; gap:10px; }
+  .card .emoji { font-size:26px; }
+  .card .name { font-size:16px; font-weight:700; line-height:1.25; flex:1; }
+  .card .have { font-size:13px; color:var(--dim); margin-top:6px; }
+  .card .have b { color:var(--good); }
+  .card .missing { font-size:12px; color:var(--bad); margin-top:3px; }
+  .badge {
+    font-size:11px; font-weight:800; letter-spacing:.5px; padding:4px 8px; border-radius:6px;
+    background:var(--good); color:#0d2413; white-space:nowrap;
+  }
+  .badge.near { background:var(--accent); color:#1a1208; }
+
+  .empty { margin-top:24px; text-align:center; padding:24px 12px; }
+  .empty .big { font-size:40px; }
+  .empty p { color:var(--dim); font-size:15px; margin-top:10px; line-height:1.5; }
+  .suggest { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:14px; }
+  .suggest button {
+    background:var(--card2); border:1px solid var(--line); color:var(--txt);
+    border-radius:999px; padding:8px 14px; font-size:14px; cursor:pointer;
+  }
+
+  /* detail */
+  .detail { display:none; }
+  .back {
+    background:none; border:none; color:var(--accent); font-size:15px; font-weight:700;
+    padding:10px 0; cursor:pointer;
+  }
+  .dhead { display:flex; align-items:center; gap:12px; margin-top:6px; }
+  .dhead .emoji { font-size:40px; }
+  .dhead h2 { font-size:22px; line-height:1.2; flex:1; }
+  .dmeta { color:var(--dim); font-size:13px; margin-top:6px; }
+  .dscore { font-size:14px; margin-top:10px; }
+  .dscore b { color:var(--good); }
+  .dscore .miss { color:var(--bad); }
+
+  .section { margin-top:18px; }
+  .section h3 { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin-bottom:8px; }
+  ul.ings { list-style:none; display:flex; flex-direction:column; gap:2px; }
+  ul.ings li {
+    display:flex; align-items:center; gap:10px; padding:8px 4px; font-size:15px;
+    border-bottom:1px solid #241f1a;
+  }
+  ul.ings li input { width:18px; height:18px; accent-color:var(--accent); }
+  ul.ings li .qty { color:var(--dim); font-size:13px; margin-left:auto; padding-left:8px; white-space:nowrap; }
+  ul.ings li.off .iname { text-decoration:line-through; color:var(--dim); }
+
+  ol.steps { padding-left:20px; display:flex; flex-direction:column; gap:10px; }
+  ol.steps li { font-size:15px; line-height:1.55; color:var(--txt); }
+
+  footer { margin-top:28px; text-align:center; color:#6b6153; font-size:12px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>fridge<span class="dot">.</span></h1>
+    <p>type what you've got. i'll tell you what to cook.</p>
+  </header>
+
+  <div id="listView">
+    <div class="inputbox">
+      <input id="input" type="text" placeholder="chicken, eggs, rice, onion..." autocomplete="off" enterkeyhint="done">
+      <button id="go">cook</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="hint" id="hint">comma separated, free text. 36 real recipes loaded, works offline.</div>
+
+    <div class="results" id="results"></div>
+    <div class="empty" id="empty" style="display:none">
+      <div class="big">🫙</div>
+      <p id="emptyText">nothing in the fridge, nothing on the plate.<br>try a few staples:</p>
+      <div class="suggest" id="suggest"></div>
+    </div>
+  </div>
+
+  <div class="detail" id="detailView">
+    <button class="back" id="back">← back to my fridge</button>
+    <div class="dhead"><span class="emoji" id="dEmoji"></span><h2 id="dName"></h2></div>
+    <div class="dmeta" id="dMeta"></div>
+    <div class="dscore" id="dScore"></div>
+    <div class="section"><h3>ingredients</h3><ul class="ings" id="dIings"></ul></div>
+    <div class="section"><h3>method</h3><ol class="steps" id="dSteps"></ol></div>
+  </div>
+
+  <footer>36 real recipes from TheMealDB · built by Drew, night two · app one of three</footer>
+</div>
+
+<script>
+/* ============ data (harvested 2026-08-13, TheMealDB, free/no key) ============ */
+// TheMealDB: free, no key. Data embedded so the playable works offline.
+window.RECIPES = [{"id":"53388","name":"Runner Bean Mash (Snijbonen Stamppot)","cat":"Side","area":"Netherlands","ings":[{"n":"Runner Beans","m":"400g"},{"n":"Garlic","m":"1 clove"},{"n":"Onion","m":"1 chopped"},{"n":"Potatoes","m":"800g"},{"n":"Butter","m":"25g"},{"n":"Mustard","m":"1 tablespoon"},{"n":"Milk","m":"1 dash"},{"n":"Cheese","m":"100g"},{"n":"Bacon","m":"75g"},{"n":"Salt","m":"Pinch"}],"steps":"Wash and chop the runner beans. Place in a saucepan with salted water and bring to a boil.\nCook the beans for about 10 minutes or until al dente. Drain and set aside.\nMeanwhile, add the potatoes and cook until tender.\nHeat a small skillet with a little butter and sauté the onion until translucent. Add the garlic and cook briefly. Add the runner beans to the pan and stir-fry for a few minutes.\nMeanwhile, mash the potatoes with a masher. Add a knob of butter and a splash of milk. Add the bean mixture and grated cheese. Season with salt, pepper and mustard.\nFry the bacon and serve with the bean mash."},{"id":"53469","name":"Beef pumpkin Stew","cat":"Beef","area":"","ings":[{"n":"Beef","m":"3 Lbs"},{"n":"All purpose flour","m":"1/2 cup"},{"n":"Butter","m":"3  tablespoons"},{"n":"Onion","m":"1 cup"},{"n":"Garlic","m":"1 clove peeled crushed"},{"n":"Beef Stock","m":"4 cups"},{"n":"Pumpkin Puree","m":"3 Cups"},{"n":"Worcestershire Sauce","m":"1 tablespoon"},{"n":"Kosher Salt","m":"1 tablespoon"},{"n":"Black Pepper","m":"1 teaspoon"},{"n":"Potatoes","m":"3 Lbs"},{"n":"Carrots","m":"1 lb"},{"n":"Thyme","m":"4 sprigs"}],"steps":"Cut the beef into 1-inch chunks. Dredge the beef in the flour until all of the beef sides are covered.\nIn a large soup pot, melt the butter over medium high-heat. In small quantities, brown the beef on all sides, removing the browned beef and setting it aside in a large bowl as you go. When the beef is browned, add the onion and the garlic to the pot. Sauté the onion and garlic for one minute, scraping the bottom of the pot as you stir.\nReturn the browned beef to the pot and add the beef stock, pumpkin puree, Worcestershire sauce, salt, and pepper. Stir well and bring to a boil. Once the liquid is boiling, reduce heat to medium-low and simmer for 3 hours, stirring occasionally.\nAdd the potatoes, carrots and thyme sprigs to the pot and increase heat to medium. Cook for an additional 30 minutes. Salt to taste and serve."},{"id":"52979","name":"Bitterballen (Dutch meatballs)","cat":"Beef","area":"Netherlands","ings":[{"n":"Butter","m":"100g"},{"n":"Flour","m":"150g"},{"n":"Beef Stock","m":"700ml"},{"n":"Onion","m":"30g"},{"n":"Parsley","m":"1 tbs"},{"n":"Beef","m":"400g"},{"n":"Salt","m":"Pinch"},{"n":"Pepper","m":"Pinch"},{"n":"Nutmeg","m":"Pinch"},{"n":"Flour","m":"50g"},{"n":"Eggs","m":"2 Beaten"},{"n":"Breadcrumbs","m":"50g"}],"steps":"Melt the butter in a skillet or pan. When melted, add the flour little by little and stir into a thick paste. Slowly stir in the stock, making sure the roux absorbs the liquid. Simmer for a couple of minutes on a low heat while you stir in the onion, parsley and the shredded meat. The mixture should thicken and turn into a heavy, thick sauce.\n\nPour the mixture into a shallow container, cover and refrigerate for several hours, or until the sauce has solidified.\n\nTake a heaping tablespoon of the cold, thick sauce and quickly roll it into a small ball. Roll lightly through the flour, then the egg and finally the breadcrumbs. Make sure that the egg covers the whole surface of the bitterbal. When done, refrigerate the snacks while the oil in your fryer heats up to 190C (375F). Fry four bitterballen at a time, until golden.\n\nServe on a plate with a nice grainy or spicy mustard."},{"id":"52823","name":"Salmon Prawn Risotto","cat":"Seafood","area":"Italian","ings":[{"n":"butter","m":"50g/2oz"},{"n":"onion","m":"1 finely chopped"},{"n":"rice","m":"150g"},{"n":"white wine","m":"125ml"},{"n":"vegetable stock","m":"1 litre hot"},{"n":"lemon","m":"The juice and zest of one"},{"n":"King Prawns","m":"240g large"},{"n":"salmon","m":"150g"},{"n":"asparagus","m":"100g tips blanched briefly in boiling water"},{"n":"black pepper","m":"ground"},{"n":"Parmesan","m":"50g shavings"}],"steps":"Melt the butter in a thick-based pan and gently cook the onion without colour until it is soft.\nAdd the rice and stir to coat all the grains in the butter\nAdd the wine and cook gently stirring until it is absorbed\nGradually add the hot stock, stirring until each addition is absorbed. Keep stirring until the rice is tender\nSeason with the lemon juice and zest, and pepper to taste. (there will probably be sufficient saltiness from the salmon to not need to add salt) Stir gently to heat through\nServe scattered with the Parmesan and seasonal vegetables.\nGrill the salmon and gently place onto the risotto with the prawns and asparagus"},{"id":"53122","name":"Fiskesuppe (Creamy Norwegian Fish Soup)","cat":"Seafood","area":"Norway","ings":[{"n":"Fish fillet","m":"1 lb"},{"n":"Garlic","m":"1 clove"},{"n":"Potatoes","m":"2 medium"},{"n":"Carrots","m":"2"},{"n":"Leek","m":"1"},{"n":"Butter","m":"3  tablespoons"},{"n":"Flour","m":"5 tablespoons"},{"n":"Fish Stock","m":"4 cups"},{"n":"Milk","m":"1 cup"},{"n":"Creme Fraiche","m":"1 1/4 cup"},{"n":"Shrimp","m":"1 cup"},{"n":"Chives","m":"1 tablespoon"}],"steps":"▢\nCut the fish fillets in cubes or strips. Crush or chop the garlic. Rinse the vegetables and cut into thin strips.\n▢\nHeat the butter in a pot and add the garlic. Once the garlic starts to turn golden add the flour, whisking well.\n▢\nAdd the fish stock and continue to whisk until there are no lumps.\n▢\nAdd the vegetables and milk and bring to a boil. Cook for about 10 minutes.\n▢\nAdd the crème fraîche (or sour cream). Bring the soup back to a simmer and once the soup begins to bubble again turn off the heat. Keep the soup on the burner and add the fish. Let the fish cook in the hot soup for 5 minutes. If using shrimp, add right before serving.\n▢\nSprinkle with chives (or dill or parsley) before serving."},{"id":"53440","name":"Balchi di Pisca","cat":"Seafood","area":"","ings":[{"n":"Salt Cod","m":"1"},{"n":"Potatoes","m":"3 Medium"},{"n":"Tomato","m":"1"},{"n":"Green Pepper","m":"1/2"},{"n":"Onion","m":"1 medium"},{"n":"Garlic","m":"1 clove peeled sliced"},{"n":"Tobasco Sauce","m":"1/2 tsp"},{"n":"Nutmeg","m":"Dash"},{"n":"Salt","m":"To taste"},{"n":"Pepper","m":"To taste"},{"n":"Egg","m":"1"}],"steps":"These delectable fish balls can also be made with salmon or fish fillets. Substitute one large can of salmon or one pound of any white fish for the cod.\n\nSoak for twenty-four hours:\n1 salted cod, or bakijow Discard the water.\n\nPlace cod in saucepan with fresh water to cover. Simmer gently until the fish flakes easily when tested with the tines of a fork. Strain, reserving a bit of the broth. De bone the cod and set it aside for later use. In a saucepan, bring to boil in water to cover: 3 medium potatoes, peeled and diced When the potatoes are tender, drain them well. Add the cod and mash the two ingredients thoroughly together.\n\nPlace in the container of an electric blender:\n1 tomato, peeled and chopped\n1/2 green pepper, chopped\n1 medium onion, peeled and chopped\n1 clove garlic, slivered\n1/2 tsp. Tabasco sauce, or minced hot pepper\nDash of nutmeg\nSalt and pepper to taste\n\nBlend for a few seconds and pour the sauce over the mashed fish mixture. Combine these ingredients well and add 1 egg, beaten Mixture should be stiff enough to mold into balls about one and a half inches in diameter, If it's too dry, add the fish stock a tablespoon at a time. Fry the balls in hot, deep fat until golden brown."},{"id":"53080","name":"Blini Pancakes","cat":"Side","area":"Russian","ings":[{"n":"Buckwheat","m":"1/2 cup"},{"n":"Flour","m":"2/3 Cup"},{"n":"Salt","m":"1/2 tsp"},{"n":"Yeast","m":"1 tsp"},{"n":"Milk","m":"1 cup"},{"n":"Butter","m":"2 tbs"},{"n":"Egg","m":"1 Seperated"}],"steps":"In a large bowl, whisk together 1/2 cup buckwheat flour, 2/3 cup all-purpose flour, 1/2 teaspoon salt, and 1 teaspoon yeast.\n\nMake a well in the center and pour in 1 cup warm milk, whisking until the batter is smooth.\n\nCover the bowl and let the batter rise until doubled, about 1 hour.\n\nEnrich and Rest the Batter\nStir 2 tablespoons melted butter and 1 egg yolk into the batter.\n\nIn a separate bowl, whisk 1 egg white until stiff, but not dry.\n\nFold the whisked egg white into the batter.\n\nCover the bowl and let the batter stand 20 minutes.\n\nPan-Fry the Blini\nHeat butter in a large nonstick skillet over medium heat.\n\nDrop quarter-sized dollops of batter into the pan, being careful not to overcrowd the pan. Cook for about 1 minute or until bubbles form.\n\nTurn and cook for about 30 additional seconds.\n\nRemove the finished blini onto a plate and cover them with a clean kitchen towel to keep warm. Add more butter to the pan and repeat the frying process with the remaining batter."},{"id":"53367","name":"Chicken Fried Rice","cat":"Chicken","area":"Chinese","ings":[{"n":"Chicken Thighs","m":"1 lb"},{"n":"Salt","m":"1 tsp"},{"n":"Canola Oil","m":"3  tablespoons"},{"n":"Egg","m":"3 Large"},{"n":"Onion","m":"2/3 Cup"},{"n":"Garlic","m":"2 cloves minced"},{"n":"Ground Ginger","m":"2 tsp"},{"n":"Carrots","m":"1 large"},{"n":"Peas","m":"2/3 Cup"},{"n":"Jasmine Rice","m":"4 cups"},{"n":"Scallions","m":"2 sliced"},{"n":"Chinese five spice powder","m":"1/2 tsp"},{"n":"Soy Sauce","m":"2.5 tbsp"},{"n":"Sesame Seed Oil","m":"1 tsp"}],"steps":"Fried rice is best made with leftover rice that's at least a day old. Otherwise it becomes gummy in the skillet.\nIf you don’t have any leftover rice from the night before, cook a batch of rice and spread it on a large baking sheet or several large plates. Let the rice dry out for about 1 to 2 hours before using it for fried rice.\n\nRice sticks to the pan very easily, so make sure to use a wok or pan that doesn’t have a sticky surface. I usually cook stir-fries in my seasoned carbon steel wok, but cast iron or nonstick pans work well, too. You might need to add a little more oil if things aren’t releasing easily.\n\nPrepare the chicken:\nChop the chicken into small 1/4-inch to 1/2-inch cubes. Sprinkle 1/2 teaspoon of salt over the chicken and mix to combine. Set the chicken aside for about 10 minutes (I usually use this time to chop all the vegetables).\n\nScramble the egg:\nHeat a wok or large sauté pan over medium-high heat. Swirl in a tablespoon of oil and add the whisked eggs. Use a spatula to quickly scramble the eggs, breaking the curds into smaller pieces as they come together. Transfer the eggs to a plate.\n\nCook the chicken:\nAdd another tablespoon of oil in the wok or pan. Add the chicken and cook for 4 to 5 minutes, stirring occasionally. Turn off the heat and transfer the cooked chicken to a plate.\n\nUsing your spatula, scrape off any chicken bits that are still stuck to the wok so they don't burn during the next step. You can also use paper towels to wipe down your wok or pan.\n\nCook the vegetables:\nSwirl 1 tablespoon of oil into the wok over medium-high heat. Add the dice …"},{"id":"53063","name":"Chivito uruguayo","cat":"Beef","area":"Uruguayan","ings":[{"n":"Beef Brisket","m":"2"},{"n":"Bread","m":"2"},{"n":"Lettuce","m":"1"},{"n":"Tomato","m":"1"},{"n":"Ham","m":"100g"},{"n":"Mozzarella","m":"100g"},{"n":"Bacon","m":"100g"},{"n":"Egg","m":"1"},{"n":"Onion","m":"1"},{"n":"Pepper","m":"1"}],"steps":"Crush the meat so that it is finite and we put it on a griddle to brown. Put the eggs, bacon and ham to fry.\nCut the bread in half, put the beef brisket, the fried eggs, the bacon, the ham, the mozzarella, the tomato and the lettuce. Cover with the other half of the bread and serve."},{"id":"52779","name":"Cream Cheese Tart","cat":"Starter","area":"United States","ings":[{"n":"Flour","m":"250g"},{"n":"Butter","m":"125g"},{"n":"Egg","m":"1"},{"n":"Salt","m":"Pinch"},{"n":"Cheese","m":"300g"},{"n":"Milk","m":"100ml milk"},{"n":"Eggs","m":"3"},{"n":"Parmesan Cheese","m":"100g"},{"n":"Plum tomatoes","m":"350g"},{"n":"White Vinegar","m":"3tbsp"},{"n":"Honey","m":"1 tbsp"},{"n":"Basil","m":"Topping"}],"steps":"Crust: make a dough from 250g flour (I like mixing different flours like plain and wholegrain spelt flour), 125g butter, 1 egg and a pinch of salt, press it into a tart form and place it in the fridge. Filling: stir 300g cream cheese and 100ml milk until smooth, add in 3 eggs, 100g grated parmesan cheese and season with salt, pepper and nutmeg. Take the crust out of the fridge and prick the bottom with a fork. Pour in the filling and bake at 175 degrees C for about 25 minutes. Cover the tart with some aluminium foil after half the time. In the mean time, slice about 350g mini tomatoes. In a small pan heat 3tbsp olive oil, 3tbsp white vinegar, 1 tbsp honey, salt and pepper and combine well. Pour over the tomato slices and mix well. With a spoon, place the tomato slices on the tart, avoiding too much liquid on it. Decorate with basil leaves and enjoy"},{"id":"53553","name":"Frikadeller - Danish Meatballs","cat":"Pork","area":"","ings":[{"n":"Onion","m":"1 large"},{"n":"Garlic","m":"1 clove"},{"n":"Minced Pork","m":"500g"},{"n":"All purpose flour","m":"1 tablespoon"},{"n":"Oats","m":"1 tablespoon"},{"n":"Milk","m":"1/2 cup"},{"n":"Egg","m":"1"},{"n":"Salt","m":"1 tablespoon"},{"n":"Ground Black Pepper","m":"1 tsp"},{"n":"Butter","m":"2 tablespoons"}],"steps":"Finely chop onion and garlic.\nStir salt into minced meat. Add the dry ingredients, then onion and garlic, then the egg. and lastly the milk. Stir the meat mixture until it is firm. Refrigerate for at least 30 minutes. You can also make the mixture one day in advance and refrigerate.\nHeat a pan over medium heat. Add butter to the pan and use a spoon to form frikadeller (meatballs) in your preferred size. We recommend using about 2 tablespoons of mixture per frikadelle.\nFry until they develop a nice browned crust on both sides and are cooked all the way through.\nServe hot with a classic potato salad on the side."},{"id":"52820","name":"Katsu Chicken curry","cat":"Chicken","area":"Japanese","ings":[{"n":"chicken breast","m":"4 pounded to 1cm thickness"},{"n":"plain flour","m":"2 tablespoons"},{"n":"egg","m":"1 beaten"},{"n":"breadcrumbs","m":"100g fine"},{"n":"vegetable oil","m":"230ml frying"},{"n":"sunflower oil","m":"2 tablespoons"},{"n":"onions","m":"2 sliced"},{"n":"garlic","m":"5 chopped cloves"},{"n":"carrot","m":"2 sliced"},{"n":"plain flour","m":"2 tablespoons"},{"n":"curry powder","m":"4 teaspoons"},{"n":"chicken stock","m":"600ml"},{"n":"honey","m":"2 teaspoons"},{"n":"soy sauce","m":"4 teaspoons"},{"n":"bay leaf","m":"1"},{"n":"garam masala","m":"1 teaspoon"}],"steps":"Prep:15min  ›  Cook:30min  ›  Ready in:45min \n\nFor the curry sauce: Heat oil in medium non-stick saucepan, add onion and garlic and cook until softened. Stir in carrots and cook over low heat for 10 to 12 minutes.\nAdd flour and curry powder; cook for 1 minute. Gradually stir in stock until combined; add honey, soy sauce and bay leaf. Slowly bring to the boil.\nTurn down heat and simmer for 20 minutes or until sauce thickens but is still of pouring consistency. Stir in garam masala. Pour the curry sauce through a sieve; return to saucepan and keep on low heat until ready to serve.\nFor the chicken: Season both sides of chicken breasts with salt and pepper. Place flour, egg and breadcrumbs in separate bowls and arrange in a row. Coat the chicken breasts in flour, then dip them into the egg, then coat in breadcrumbs, making sure you cover both sides.\nHeat oil in large frying pan over medium-high heat. Place chicken into hot oil and cook until golden brown, about 3 or 4 minutes each side. Once cooked, place on kitchen paper to absorb excess oil.\nPour curry sauce over chicken, serve with white rice and enjoy!"},{"id":"53455","name":"Chicken Liver Pate Recipe","cat":"Chicken","area":"","ings":[{"n":"Chicken Liver","m":"1lb"},{"n":"Bacon","m":"1/2 lb"},{"n":"Garlic","m":"1 clove"},{"n":"Onion","m":"1 large"},{"n":"Ground Mustard","m":"2 tsp"},{"n":"Salt","m":"To taste"},{"n":"Pepper","m":"To taste"},{"n":"Milk","m":"Splash"},{"n":"Sherry","m":"1 tablespoon"}],"steps":"Clean livers of sinews and gall.\nPut into a fireproof casserole with all other ingredients roughly chopped.\nSeason and cover with milk.\nPut the lid on the casserole and cook in a slow oven (300ºF) for 2 hours.\nLiquidize in a blender.\nAdjust seasoning.\nAdd sherry or brandy.\nPut in a dish and cover with melted butte"},{"id":"53445","name":"Kaspressknödel - Cheese Dumplings","cat":"Vegetarian","area":"","ings":[{"n":"Bread","m":"250g"},{"n":"Cheese","m":"250g"},{"n":"Eggs","m":"2"},{"n":"Salt","m":"Pinch"},{"n":"Parsley","m":"Pinch"},{"n":"Potatoes","m":"3"},{"n":"Flour","m":"100g"},{"n":"Milk","m":"250ml"},{"n":"Onion","m":"1 small"},{"n":"Butter","m":"For frying"}],"steps":"Step 1\nMix the cubed white bread with the milk, season with salt, and let the mixture rest for a while.\n\nStep 2\nNow add the shredded potatoes, the grated cheese, eggs, and parsley.\n\nStep 3\nMelt the butter and fry the cubed onions until golden brown in colour and put into the mixture.\n\nStep 4\nAdd the flour and gently knead the dough. Shape it into round dumplings, gently press them flat and fry them on both sides in butter until golden brown.\n\nStep 5\nServe in clear broth."},{"id":"53487","name":"Oyster Mushroom Soup","cat":"Starter","area":"","ings":[{"n":"Oyster Mushrooms","m":"1 lb"},{"n":"Butter","m":"4 tablespoons"},{"n":"Salt","m":"1 tsp"},{"n":"Water","m":"1 cup"},{"n":"Flour","m":"2 tablespoons"},{"n":"Milk","m":"1 cup"},{"n":"Garlic","m":"3 cloves"},{"n":"Red Wine Vinegar","m":"1/3 cup"},{"n":"Red Pepper Flakes","m":"Garnish"}],"steps":"Clean mushrooms – I usually wash them under cold water, dry them and remove the stems.\nCut mushrooms into thin strips.\nMelt butter in a small pot. Add the mushrooms and cook for 10 minutes, until the mushrooms release liquid.\nCombine the flour and water, whisk to remove any lumps and add to the pot. Add the salt and milk.\nCook for 10 more minutes.\nIn a small bowl or jar combine the garlic and vinegar.\nServe the soup with 1-2 tablespoons (or more) of the garlic and vinegar mixture and hot red pepper."},{"id":"52939","name":"Callaloo Jamaican Style","cat":"Miscellaneous","area":"Jamaican","ings":[{"n":"Kale","m":"1  bunch"},{"n":"Bacon","m":"2 strips"},{"n":"Garlic","m":"3 cloves Chopped"},{"n":"Onion","m":"1 medium"},{"n":"Paprika","m":"1/2 tsp"},{"n":"Thyme","m":"1 Sprig"},{"n":"Tomato","m":"1"},{"n":"Red Pepper","m":"1"},{"n":"Banana","m":"4"},{"n":"Vegetable Oil","m":"Splash"}],"steps":"Cut leaves and soft stems from the kale branches, them soak in a bowl of cold water for about 5-10 minutes or until finish with prep.\nProceed to slicing the onions, mincing the garlic and dicing the tomatoes. Set aside\nRemove kale from water cut in chunks.\nPlace bacon on saucepan and cook until crispy. Then add onions, garlic, thyme, stir for about a minute or more\nAdd tomatoes; scotch bonnet pepper, smoked paprika. Sauté for about 2-3 more minutes.\nFinally add vegetable, salt, mix well, and steamed for about 6-8 minutes or until leaves are tender. Add a tiny bit of water as needed. Adjust seasonings and turn off the heat.\nUsing a sharp knife cut both ends off the plantain. This will make it easy to grab the skin of the plantains. Slit a shallow line down the long seam of the plantain; peel only as deep as the peel. Remove plantain peel by pulling it back.\nSlice the plantain into medium size lengthwise slices and set aside.\nCoat a large frying pan with cooking oil spray. Spray the tops of the plantains with a generous layer of oil spray and sprinkle with salt, freshly ground pepper.\nLet the plantains \"fry\" on medium heat, shaking the frying pan to redistribute them every few minutes.\nAs the plantains brown, continue to add more cooking oil spray, salt and pepper (if needed) until they have reached the desired color and texture.\nRemove and serve with kale"},{"id":"53255","name":"Grilled aubergines with spicy chickpeas & walnut sauce","cat":"Vegetarian","area":"Turkish","ings":[{"n":"Olive Oil","m":"4 tablespoons"},{"n":"Onion","m":"1 chopped"},{"n":"Red Chilli","m":"1 chopped"},{"n":"Ginger","m":"2cm piece"},{"n":"Ground Cumin","m":"1/2 teaspoon"},{"n":"Chickpeas","m":"400g"},{"n":"Tomato","m":"200g"},{"n":"Lemon","m":"Juice of 1/2"},{"n":"Aubergine","m":"2"},{"n":"Greek Yogurt","m":"200g"},{"n":"Garlic Clove","m":"1"},{"n":"Walnuts","m":"25g"},{"n":"Coriander","m":"Handful"}],"steps":"step 1\nHeat 2 tbsp oil in a pan, add the onion and fry until soft and lightly browned, about 10 mins. Add the chilli, ginger and spices and mix well. Stir in the chickpeas, tomatoes and 5 tbsp water, bring to the boil, then simmer for 10 mins. Add a little salt and pepper and the lemon juice.\n\nstep 2\nArrange the aubergines over a grill pan. Brush lightly with oil, sprinkle with salt and pepper, then grill until golden. Flip them over, brush again with oil, season and grill again until tender and golden.\n\nstep 3\nMix the yogurt with the garlic, most of the walnuts and coriander and a little salt and pepper. Arrange the aubergine slices over a warm platter and spoon over the chickpea mix. Drizzle with the walnut sauce and scatter with the remaining walnuts and coriander."},{"id":"53253","name":"Imam bayildi with BBQ lamb & tzatziki","cat":"Lamb","area":"Turkish","ings":[{"n":"Aubergine","m":"3"},{"n":"Olive Oil","m":"2 tablespoons"},{"n":"Onion","m":"1 chopped"},{"n":"Garlic","m":"2 cloves chopped"},{"n":"Cinnamon","m":"1 tsp"},{"n":"Tomato","m":"8"},{"n":"Parsley","m":"Bunch"},{"n":"Lamb Loin Chops","m":"12"},{"n":"Paprika","m":"Pinch"},{"n":"Lemon","m":"1"},{"n":"Greek Yogurt","m":"150g"},{"n":"Cucumber","m":"1/2"},{"n":"Mint","m":"2 tbs chopped"}],"steps":"step 1\nHeat oven to 190C/170C fan/gas 5. Halve the aubergines lengthways and score the flesh side deeply, brush with a good layer of olive oil and put on a baking sheet. Roast for 20 mins or until the flesh is soft enough to scoop out.\n\nstep 2\nFry the onion in a little oil until soft, add the garlic and cinnamon and fry for 1 min. Once the aubergines are cool enough to handle, scoop out the centres. Roughly chop the flesh and add it to the onions. Halve the tomatoes, scoop the seeds and juice into a sieve set over a bowl, then chop the flesh. Add the chopped tomatoes to the pan and cook everything for 10 mins until nice and soft. Add a little more oil if you need to. Stir in the parsley, leaving a little for scattering at the end.\n\nstep 3\nLay the aubergine halves in a baking dish and divide the tomato mixture between them. Pour over the juice from the tomatoes, drizzle with more olive oil and bake for 30 mins until the aubergines have collapsed.\n\nstep 4\nMeanwhile, mix the tzatziki ingredients together and put in a small serving bowl.\n\nstep 5\nSeason the lamb with salt, black pepper and a pinch of paprika. Griddle, grill or barbecue for 3 mins on each side or until the fat is nicely browned, then put in a serving dish and squeeze over the lemon halves. Scatter the aubergines with parsley, then serve with the lamb and tzatziki."},{"id":"52973","name":"Leblebi Soup","cat":"Vegetarian","area":"Tunisian","ings":[{"n":"Olive Oil","m":"2 tbs"},{"n":"Onion","m":"1 medium finely diced"},{"n":"Chickpeas","m":"250g"},{"n":"Vegetable Stock","m":"1.5L"},{"n":"Cumin","m":"1 tsp"},{"n":"Garlic","m":"5 cloves"},{"n":"Salt","m":"1/2 tsp"},{"n":"Harissa Spice","m":"1 tsp"},{"n":"Pepper","m":"Pinch"},{"n":"Lime","m":"1/2"}],"steps":"Heat the oil in a large pot. Add the onion and cook until translucent.\nDrain the soaked chickpeas and add them to the pot together with the vegetable stock. Bring to the boil, then reduce the heat and cover. Simmer for 30 minutes.\nIn the meantime toast the cumin in a small ungreased frying pan, then grind them in a mortar. Add the garlic and salt and pound to a fine paste.\nAdd the paste and the harissa to the soup and simmer until the chickpeas are tender, about 30 minutes.\nSeason to taste with salt, pepper and lemon juice and serve hot."},{"id":"52972","name":"Tunisian Lamb Soup","cat":"Lamb","area":"Tunisian","ings":[{"n":"Lamb Mince","m":"500g"},{"n":"Garlic","m":"2 cloves minced"},{"n":"Onion","m":"1"},{"n":"Spinach","m":"300g"},{"n":"Tomato Puree","m":"3 tbs"},{"n":"Cumin","m":"1 tbs"},{"n":"Chicken Stock","m":"1 Litre"},{"n":"Harissa Spice","m":"3 tsp"},{"n":"Chickpeas","m":"400g"},{"n":"Lemon Juice","m":"1/2"},{"n":"Macaroni","m":"150g"},{"n":"Salt","m":"Pinch"},{"n":"Pepper","m":"Pinch"}],"steps":"Add the lamb to a casserole and cook over high heat. When browned, remove from the heat and set aside.\nKeep a tablespoon of fat in the casserole and discard the rest. Reduce to medium heat then add the garlic, onion and spinach and cook until the onion is translucent and the spinach wilted or about 5 minutes.\nReturn the lamb to the casserole with the onion-spinach mixture, add the tomato puree, cumin, harissa, chicken, chickpeas, lemon juice, salt and pepper in the pan. Simmer over low heat for about 20 minutes.\nAdd the pasta and cook for 15 minutes or until pasta is cooked."},{"id":"53404","name":"Tavë Kosi Baked Lamb and Yogurt","cat":"Lamb","area":"","ings":[{"n":"Lamb","m":"600g"},{"n":"Butter","m":"20g"},{"n":"Olive Oil","m":"2 tablespoons"},{"n":"Rice","m":"70g"},{"n":"Oregano","m":"2 tsp"},{"n":"Boiling Water","m":"450ml"},{"n":"Garlic","m":"2 cloves chopped"},{"n":"Salt","m":"Pinch"},{"n":"Pepper","m":"Pinch"},{"n":"Butter","m":"50g"},{"n":"Flour","m":"2 tablespoons"},{"n":"Greek Yogurt","m":"750g"},{"n":"Eggs","m":"6"},{"n":"Salt","m":"Pinch"},{"n":"Pepper","m":"Pinch"}],"steps":"1\nBaking the Lamb\nIn a large pan (with a lid) melt the butter and olive oil together then add the diced lamb. Brown the lamb on a medium heat, this will take around 5 minutes.\n2\nAdd the garlic, oregano, 300ml of water and season with salt and pepper. Mix well before covering with the lid. Leave to simmer for 50 minutes mixing a couple of times ensuring the lamb doesn’t start to burn.\n3\nThe juices should have nearly all boiled away so another 150ml of water should be added along with the rice. Mix altogether, bring to the boil, place the lid on and leave for just 10 minutes. It’s advised to check at around 8 minutes – you want the liquid to be evaporated with just moist coating of oily water left over the lamb and rice.\n4\nPlace the lamb and rice into a casserole dish, the mixture should fully cover the base and have at least 2 inches spare for the yogurt. Alternatively you can split into four ceramic bowls.\n5\nMaking a Roux\nIn a small saucepan melt the butter over a medium heat and then add two tablespoons of flour while continuously stirring for two minutes (add a little extra flour if needed). The roux should not be thick but not too runny, the colour will darken slightly. Pour the roux into a bowl and keep to one side.\n6\nMaking the Yogurt Mixture\nIn a mixing bowl add the yogurt, eggs and season with salt and pepper. Mix together then add the roux continuing to mix fast for a minute to ensure the roux and yogurt are thoroughly combined.\n7\nPour the yogurt mixture over the baked lamb and rice and sprinkle on a little oregano.\n8\nCooking\nPlace on the bottom shelf of the oven on …"},{"id":"53161","name":"Chicken & chorizo rice pot","cat":"Chicken","area":"Spanish","ings":[{"n":"Oil","m":"1 tblsp"},{"n":"Chicken","m":"1 whole"},{"n":"Onion","m":"1 Large Chopped"},{"n":"Red Pepper","m":"1 chopped"},{"n":"Garlic","m":"3 Cloves Crushed"},{"n":"Chorizo","m":"225g"},{"n":"Tomato Puree","m":"1 tblsp"},{"n":"Thyme","m":"1 tablespoon chopped"},{"n":"White Wine","m":"150ml"},{"n":"Chicken Stock","m":"800ml"},{"n":"Rice","m":"400g"},{"n":"Parsley","m":"2 tbs chopped"}],"steps":"step 1\nHeat the oil in a large flameproof casserole dish and brown the chicken pieces on all sides – you may have to do this in batches. Remove from the dish and put to one side.\n\nstep 2\nLower the heat, add the onion and pepper, and gently cook for 10 mins until softened. Add the garlic and chorizo, and cook for a further 2 mins until the chorizo has released some of its oils into the dish. Stir in the tomato purée and cook for 1 min more.\n\nstep 3\nReturn the chicken pieces to the dish along with the thyme, white wine and stock. Bring the liquid to a boil, cover the dish with a tight-fitting lid and lower the heat. Cook for 30 mins.\n\nstep 4\nTip in the rice and stir everything together. Cover, set over a low heat and cook for a further 15 mins, or until the rice is cooked and has absorbed most of the cooking liquid. Remove from the heat and leave the dish to sit for 10 mins to absorb any remaining liquid. Season to taste and scatter with parsley to serve."},{"id":"53329","name":"Arepa pelua","cat":"Beef","area":"Venezuela","ings":[{"n":"Beef","m":"500g"},{"n":"Onion","m":"1"},{"n":"Red Pepper","m":"1"},{"n":"Garlic","m":"2 cloves"},{"n":"Cumin","m":"1 tsp"},{"n":"Oregano","m":"1 tsp"},{"n":"Paprika","m":"1 tsp"},{"n":"Beef Stock","m":"1 L"},{"n":"Water","m":"2 1/2 cups"},{"n":"Salt","m":"Pinch"},{"n":"Cheese","m":"200g"},{"n":"Extra Virgin Olive Oil","m":"Pinch"}],"steps":"Cook the meat: Place the flank steak in a pot with broth or water and salt. Cook over low heat for about 2 hours, until tender and easy to shred.\nShred the meat: Once cooked, drain and shred the meat using two forks.\nPrepare the vegetables: Sauté chopped onion, bell pepper, and garlic in a little oil. Add cumin, oregano, paprika, and salt. Stir in the meat and cook for a few minutes until the flavors are well combined.\nMake the dough: In a bowl, mix the cornmeal with warm water and salt until a soft dough forms. Let it rest for 5 minutes.\nForm the arepas: Divide the dough into 6 portions, shape into balls, and flatten into thick discs.\nCook: Cook the arepas on a griddle or skillet over medium heat for 2–3 minutes on each side until golden. You can then bake them for a few minutes if you prefer them crispier.\nFill: Slice the arepas open on one side, fill with the hot shredded beef, and top with grated cheese."},{"id":"53146","name":"Locro","cat":"Miscellaneous","area":"Argentina","ings":[{"n":"Dried white corn","m":"500g"},{"n":"Dried white beans","m":"200g"},{"n":"Pumpkin","m":"300g"},{"n":"Potatoes","m":"200g"},{"n":"Beef","m":"300g"},{"n":"Pork","m":"200g"},{"n":"Chorizo","m":"1"},{"n":"Onion","m":"1 chopped"},{"n":"Paprika","m":"1 teaspoon"},{"n":"Salt","m":"To taste"},{"n":"Pepper","m":"To taste"}],"steps":"Soak: Soak corn and beans overnight in water.\nCook Meats: In a large pot, brown the beef and pork. Add onions and spices, cooking until translucent.\nSimmer the Stew: Add soaked corn and beans, pumpkin, potato, and enough water to cover. Simmer for 2-3 hours, until thick.\nServe: Enjoy hot, with bread on the side.\nPro Tips:\n\nToasting the corn slightly before adding it to the stew enhances its flavor.\nAdd a spoonful of paprika or a dash of cumin for an extra layer of warmth and complexity"},{"id":"52954","name":"Hot and Sour Soup","cat":"Pork","area":"Chinese","ings":[{"n":"Mushrooms","m":"1/3 cup"},{"n":"Wood Ear Mushrooms","m":"1/3 cup"},{"n":"Tofu","m":"2/3 Cup"},{"n":"Pork","m":"1/2 cup"},{"n":"Chicken Stock","m":"2-1/2 cups"},{"n":"Salt","m":"1/2 tsp"},{"n":"Sugar","m":"1/4 tsp"},{"n":"Sesame Seed Oil","m":"1 tsp"},{"n":"Pepper","m":"1/4 tsp"},{"n":"Hotsauce","m":"1/2 tsp"},{"n":"Vinegar","m":"1-½ cups"},{"n":"Soy Sauce","m":"1 tsp"},{"n":"Cornstarch","m":"1 tbs"},{"n":"Water","m":"2 tbs"},{"n":"Spring Onions","m":"1/4 cup"}],"steps":"STEP 1 - MAKING THE SOUP\nIn a wok add chicken broth and wait for it to boil.\nNext add salt, sugar, sesame seed oil, white pepper, hot pepper sauce, vinegar and soy sauce and stir for few seconds.\nAdd Tofu, mushrooms, black wood ear mushrooms to the wok.\nTo thicken the sauce, whisk together 1 Tablespoon of cornstarch and 2 Tablespoon of water in a bowl and slowly add to your soup until it's the right thickness.\nNext add 1 egg slightly beaten with a knife or fork and add it to the soup and stir for 8 seconds\nServe the soup in a bowl and add the bbq pork and sliced green onions on top."},{"id":"52994","name":"Skillet Apple Pork Chops with Roasted Sweet Potatoes & Zucchini","cat":"Pork","area":"United States","ings":[{"n":"Potatoes","m":"2"},{"n":"Apples","m":"1"},{"n":"Garlic","m":"2 cloves"},{"n":"Lemon","m":"1"},{"n":"Pork","m":"2"},{"n":"Zucchini","m":"1"},{"n":"Chicken Stock","m":"1"},{"n":"Vegetable Oil","m":"1 tbsp"},{"n":"Sugar","m":"1 1/2 tsp"},{"n":"Butter","m":"2 tbsp"}],"steps":"Serves 2\n\n\n1. \n\nAdjust racks to top and middle positions and preheat oven to 450 degrees. Wash and dry all produce. Dice sweet potatoes into 1/2-inch pieces. Toss on a baking sheet with a drizzle of oil, salt, and pepper. Roast on top rack for 12 minutes (we'll roast the zucchini then). \n\n\n2. \n\nMeanwhile, halve and core apple; thinly slice into half-moons. Peel and finely chop garlic. Quarter lemon. Trim and halve zucchini lengthwise; cut crosswise into 1/2-inch-thick half-moons. Toss on a second baking sheet with a drizzle of oil and a pinch of salt and pepper. Set aside. \n\n\n3. \n\nPat pork dry with paper towels and season all over with salt and pepper. Heat a drizzle of oil in a large pan over medium-high heat. Add pork and cook until browned and cooked through, 4-5 minutes per side. Turn off heat; transfer to a plate. \n\n\n4. \n\nOnce sweet potatoes have roasted 12 minutes, transfer baking sheet with zucchini to middle rack and continue roasting until both veggies are browned and softened, 12-15 minutes more. \n\n\n5. \n\nMeanwhile, melt 1 TBSP butter (2 TBSP for 4 servings) in pan used for pork over medium-high heat. Add apple and season with salt and pepper. Cook, scraping up any browned bits from bottom of pan, until apple is slightly softened, 2-3 minutes. Add garlic; cook until fragrant, 30 seconds. Add 1/z cup water (3/4 cup for 4), stock concentrate, and 11/2 tsp sugar (3 tsp for 4). Cook, stirring, until sauce has thickened and apple is very tender, 3-5 minutes. Season with salt and pepper. \n\n\n6. \n\nRemove pan with apple from heat; stir in 1 TBSP butter (2 TBSP for 4 serving …"},{"id":"52777","name":"Mediterranean Pasta Salad","cat":"Seafood","area":"Italian","ings":[{"n":"mozzarella balls","m":"200 g"},{"n":"baby plum tomatoes","m":"250 g"},{"n":"fresh basil","m":"1  bunch"},{"n":"farfalle","m":"350 g"},{"n":"extra virgin olive oil","m":"3  tablespoons"},{"n":"Green Olives","m":"40 g"},{"n":"tuna","m":"200 g"},{"n":"salt","m":"to taste"},{"n":"pepper","m":"to taste"}],"steps":"Bring a large saucepan of salted water to the boil\nAdd the pasta, stir once and cook for about 10 minutes or as directed on the packet.\nMeanwhile, wash the tomatoes and cut into quarters. Slice the olives. Wash the basil.\nPut the tomatoes into a salad bowl and tear the basil leaves over them. Add a tablespoon of olive oil and mix.\nWhen the pasta is ready, drain into a colander and run cold water over it to cool it quickly.\nToss the pasta into the salad bowl with the tomatoes and basil.\nAdd the sliced olives, drained mozzarella balls, and chunks of tuna. Mix well and let the salad rest for at least half an hour to allow the flavours to mingle.\nSprinkle the pasta with a generous grind of black pepper and drizzle with the remaining olive oil just before serving."},{"id":"53316","name":"Beetroot pancakes","cat":"Dessert","area":"Ukrainian","ings":[{"n":"Beetroot","m":"3"},{"n":"Milk","m":"50 ml"},{"n":"Self-raising Flour","m":"200g"},{"n":"Baking Powder","m":"1 tsp"},{"n":"Maple Syrup","m":"2 tablespoons"},{"n":"Vanilla Extract","m":"1/2 teaspoon"},{"n":"Egg","m":"3"},{"n":"Butter","m":"25g"},{"n":"Frozen Mixed Berries","m":"200g"},{"n":"Blackcurrant Jam","m":"2 tablespoons"},{"n":"Greek Yogurt","m":"100g"}],"steps":"step 1\nPut the beetroot in a jug with the milk and blend with a stick blender until smooth. Pour into a bowl with the rest of the pancake ingredients and whisk until smooth and vibrant purple.\n\nstep 2\nPut a small knob of butter in a large non-stick frying pan and heat over a medium-low heat until melted and foamy. Now create 3 or 4 pancakes each made from 2 tbsp of the batter. Cook for 2-3 mins then flip over and cook for a further minute until cooked through. Repeat with any remaining batter. Heat oven to lowest setting and keep the pancakes warm in there until needed.\n\nstep 3\nServe with your favourite pancake toppings or make a simple compote by simmering frozen berries in with 1 tbsp blackcurrant jam until bubbling and syrupy (about 5-10 mins). In a small bowl stir together the remaining jam and the yogurt. Stack the cooked pancakes with the yogurt and pour the warm berry compote over the top."},{"id":"53036","name":"Boxty Breakfast","cat":"Pork","area":"Irish","ings":[{"n":"Potatoes","m":"4 large"},{"n":"Spring Onions","m":"1  bunch"},{"n":"Plain Flour","m":"100g"},{"n":"Egg White","m":"1"},{"n":"Milk","m":"150ml"},{"n":"Bicarbonate Of Soda","m":"1 tsp"},{"n":"Butter","m":"3 tbs"},{"n":"Vegetable Oil","m":"2 tbs"},{"n":"Cherry Tomatoes","m":"6"},{"n":"Bacon","m":"12"},{"n":"Egg","m":"6"}],"steps":"STEP 1\nBefore you start, put your oven on its lowest setting, ready to keep things warm. Peel the potatoes, grate 2 of them, then set aside. Cut the other 2 into large chunks, then boil for 10-15 mins or until tender. Meanwhile, squeeze as much of the liquid from the grated potatoes as you can using a clean tea towel. Mash the boiled potatoes, then mix with the grated potato, spring onions and flour.\n\nSTEP 2\nWhisk the egg white in a large bowl until it holds soft peaks. Fold in the buttermilk, then add the bicarbonate of soda. Fold into the potato mix.\n\nSTEP 3\nHeat a large non-stick frying pan over a medium heat, then add 1 tbsp butter and some of the oil. Drop 3-4 spoonfuls of the potato mixture into the pan, then gently cook for 3-5 mins on each side until golden and crusty. Keep warm on a plate in the oven while you cook the next batch, adding more butter and oil to the pan before you do so. You will get 16 crumpet-size boxty from the mix. Can be made the day ahead, drained on kitchen paper, then reheated in a low oven for 20 mins.\n\nSTEP 4\nHeat the grill to medium and put the tomatoes in a heavy-based pan. Add a good knob of butter and a little oil, then fry for about 5 mins until softened. Grill the bacon, then pile onto a plate and keep warm. Stack up the boxty, bacon and egg, and serve the tomatoes on the side."},{"id":"53442","name":"Cheese Sticks","cat":"Side","area":"","ings":[{"n":"Flour","m":"1 cup"},{"n":"Milk","m":"1/2 cup"},{"n":"Butter","m":"Knob"},{"n":"Egg","m":"1"},{"n":"Mozzarella","m":"1 kg"},{"n":"Sugar","m":"1 tsp"},{"n":"Salt","m":"1 tsp"},{"n":"Olive Oil","m":"1 tsp"},{"n":"Oil","m":"For frying"}],"steps":"Cut the cheese and long strips and place in your fridge to prevent it becoming soft. Mix flour, butter and egg in a bowl, and add sugar, salt and olive oil to taste into the mix. Then gradually add milk and knead well for a suitable consistency.\n\nStretch out the dough with a rolling pin and cut into long strips (2 to 3 cm) and then roll the strips of dough around the cheese strips forming a spiral. Make sure the dough covers the cheese fully so that it doesn't melt out while frying. Roll the cheese & dough strips through flour to prevent them from sticking while frying. Heat oil in a frying pan until hot before placing the cheese sticks, and fry until golden in color."},{"id":"53266","name":"Falafel","cat":"Vegetarian","area":"Turkish","ings":[{"n":"Sunflower Oil","m":"2 tablespoons"},{"n":"Onion","m":"1 chopped"},{"n":"Garlic","m":"1 clove peeled crushed"},{"n":"Chickpeas","m":"400g"},{"n":"Ground Cumin","m":"1 tsp"},{"n":"Ground Coriander","m":"1 tsp"},{"n":"Parsley","m":"Handful"},{"n":"Egg","m":"1 beaten"}],"steps":"step 1\nHeat 1 tbsp oil in a large pan, then fry the onion and garlic over a low heat for 5 mins until softened. Tip into a large mixing bowl with the chickpeas and spices, then mash together with a fork or potato masher until the chickpeas are totally broken down. Stir in the parsley or dried herbs, with seasoning to taste. Add the egg, then squish the mixture together with your hands.\n\nstep 2\nMould the mix into 6 balls, then flatten into patties. Heat the remaining oil in the pan, then fry the falafels on a medium heat for 3 mins on each side, until golden brown and firm. Serve hot or cold with couscous, pitta bread or salad."},{"id":"53578","name":"Gingerbread Waffles","cat":"Dessert","area":"","ings":[{"n":"Flour","m":"100ml"},{"n":"Dark Beer","m":"200ml"},{"n":"Milk","m":"50ml/2fl oz"},{"n":"Egg","m":"1"},{"n":"Sugar","m":"3  tablespoons"},{"n":"Salt","m":"Pinch"},{"n":"Gingerbread Spice","m":"1 teaspoon"},{"n":"Butter","m":"1 tablespoon"}],"steps":"beat egg and sugar into a light foam\nsift together flour, salt and gingerbread spice.\nAdd the dry ingredients to the wet mixture gradually while stirring\nAdd milk and beer while stirring\nadd melted butter\nLet set and bake waffles"},{"id":"53461","name":"Macaroni Pie","cat":"Pasta","area":"","ings":[{"n":"Macaroni","m":"250g"},{"n":"Butter","m":"1 tablespoon"},{"n":"Cheddar Cheese","m":"375g"},{"n":"Egg","m":"1"},{"n":"Milk","m":"250ml"},{"n":"Ground Onion","m":"2 tsp"},{"n":"Mustard","m":"1 tsp"},{"n":"Pepper","m":"1 tsp"},{"n":"Salt","m":"1 tsp"},{"n":"Cayenne Pepper","m":"1/2 tsp"},{"n":"Breadcrumbs","m":"2 tablespoons"},{"n":"Butter","m":"2 tsp"},{"n":"Cheddar Cheese","m":"2 tablespoons"}],"steps":"Bring water to a boil and add the broken-up macaroni, elbows, and salt. Cook uncovered until tender but not overcooked (about 8 minutes).\n\nPreheat a moderately hot oven to 350F, 180C, or Gas Mark 4.\n\nDrain the macaroni thoroughly, put it back into the same hot saucepan cooked in, and mix in the butter.\n\nGrate the cheese and mix it with the macaroni while it is still warm.\n\nWhisk the egg until fluffy, and add the milk, onion powder, white pepper, salt, pepper sauce, and mustard. Pour in with the macaroni and mix.\n\nPlace in a greased ovenproof casserole dish. Top with butter, some grated cheese, and fine breadcrumbs. Bake in the center of the oven for about 30-45 minutes, depending on the dish’s depth."},{"id":"53331","name":"Oatmeal pancakes","cat":"Breakfast","area":"Venezuela","ings":[{"n":"Egg","m":"1 medium"},{"n":"Milk","m":"80 ml"},{"n":"Sugar","m":"1 tablespoon"},{"n":"Baking Powder","m":"1 tsp"},{"n":"Salt","m":"Pinch"},{"n":"Vanilla Extract","m":"1 dash"},{"n":"Ground Oats","m":"150g"},{"n":"Butter","m":"150g"},{"n":"Sugar Syrup","m":"1 tablespoon"},{"n":"Strawberries","m":"3"}],"steps":"Place all the ingredients in the glass and beat.\nLet the mixture stand for 10 minutes.\nGrease a hot frying pan with a little butter and pour a little of the mixture.\nWhen it starts to bubble on the surface, turn over with a spatula. Cook over medium-low heat so that they do not burn.\nFinally, add the caramel and strawberries."},{"id":"53574","name":"Quark and Rhubarb Pie","cat":"Dessert","area":"","ings":[{"n":"Milk","m":"100ml"},{"n":"Yeast","m":"10g"},{"n":"Sugar","m":"1 tablespoon"},{"n":"Egg","m":"1"},{"n":"Butter","m":"25g"},{"n":"Salt","m":"1/2 tsp"},{"n":"Cardamom","m":"1/2 tsp"},{"n":"Flour","m":"300ml"},{"n":"Sweet Quark","m":"200g"},{"n":"Rhubarb","m":"1 cup"},{"n":"Sugar","m":"Pinch"},{"n":"Cinnamon","m":"Pinch"}],"steps":"All materials must be in room temperature\nDissolve yeast with lukewarm (37C) milk and sugar\nAdd about half of the quantity of flour, mixed with salt\nBeat the mixture for a short time. Sprinkle with a little flour , cover the bowl with a towel and place in a warm place to rise for ca 1 hour\nAdd additional flour, cardamom\nadd melted butter. Beat egg and leave ca 1 teaspoon for spreading.Add other beaten egg in to the dough\nKnead the dough properly, until it separates from the bowl.\nSprinkle with a little flour , cover the bowl with a towel and place in a warm place to rise for ca 1 hour until dough is doubled in size.\nRoll the dough to a square and put in centre quark. Turn edges on to the quark and roll again carefully  to a rectangle.\nPour on to the rectangle rhubarb, sugar and cinnamon. leave one edge ca 2 cm empty. Roll and cut in to the equal slices. You should get ca 6-7 rolls. Empty edge turn under the roll as bottom.\nPut roll in to the butter-spreaded springform pan, as flower. one roll in to the centre and others around. Let enough space to rise.\n\nCoat buns with beaten egg before putting into the oven. Bate at 180C 20-30 minutes .\nDecorate with icing sugar."},{"id":"52928","name":"BeaverTails","cat":"Dessert","area":"Canadian","ings":[{"n":"Water","m":"1/2 cup"},{"n":"Yeast","m":"2 parts"},{"n":"Sugar","m":"1/2 cup"},{"n":"Milk","m":"1/2 cup"},{"n":"Butter","m":"6 tblsp"},{"n":"Eggs","m":"2"},{"n":"Salt","m":"1 ½ tsp"},{"n":"Flour","m":"2-1/2 cups"},{"n":"Oil","m":"for frying"},{"n":"Lemon","m":"garnish"},{"n":"Sugar","m":"garnish"},{"n":"Cinnamon","m":"garnish"}],"steps":"In the bowl of a stand mixer, add warm water, a big pinch of sugar and yeast. Allow to sit until frothy.\nInto the same bowl, add 1/2 cup sugar, warm milk, melted butter, eggs and salt, and whisk until combined.\nPlace a dough hook on the mixer, add the flour with the machine on, until a smooth but slightly sticky dough forms.\nPlace dough in a bowl, cover with plastic wrap, and allow to proof for 1 1/2 hours.\nCut dough into 12 pieces, and roll out into long oval-like shapes about 1/4 inch thick that resemble a beaver’s tail.\nIn a large, deep pot, heat oil to 350 degrees. Gently place beavertail dough into hot oil and cook for 30 to 45 seconds on each side until golden brown.\nDrain on paper towels, and garnish as desired. Toss in cinnamon sugar, in white sugar with a squeeze of lemon, or with a generous slathering of Nutella and a handful of toasted almonds. Enjoy!"}];
+
+/* ============ matching engine (ported from proto/match-test.js, live-tested) ============ */
+var PERISHABLE = new Set([
+  "egg","milk","butter","cheese","yogurt","cream","prawn","shrimp","fish","cod","salmon","tuna",
+  "chicken","beef","pork","lamb","bacon","sausage","ham","chorizo","mince","kale","spinach",
+  "lettuce","cucumber","broccoli","cauliflower","celery","zucchini","courgette","aubergine","leek",
+  "tomato","onion","garlic","potato","carrot","pepper","mushroom","beetroot","asparagus","peas",
+  "apple","banana","lemon","lime","orange","avocado","basil","parsley","cilantro","coriander","mint",
+  "chickpea","lentil","tofu","buckwheat","yeast","strawberrie"
+]);
+var PERISHABLE_ARR = []; PERISHABLE.forEach((p) => { PERISHABLE_ARR.push(p); });
+function norm(s){
+  var x = (s||"").toLowerCase().trim();
+  if (x.endsWith("ies")) x = x.slice(0,-3)+"y";
+  else if (x.endsWith("es") && x.length>3) x = x.slice(0,-2);
+  else if (x.endsWith("s") && x.length>2 && !x.endsWith("ss")) x = x.slice(0,-1);
+  return x;
+}
+var ALIASES = {
+  "coriander":"cilantro","courgette":"zucchini","aubergine":"eggplant",
+  "spring onion":"scallion","green onion":"scallion",
+  "potatoe":"potato","tomatoe":"tomato","prawns":"prawn","prawn":"shrimp"
+};
+// invert so aliases resolve in both directions (dataset uses "Coriander", not "cilantro")
+var REV_ALIASES = {};
+Object.keys(ALIASES).forEach((k) => { REV_ALIASES[ALIASES[k]] = k; });
+var FAMILY = {
+  "pasta":["spaghetti","penne rigate","macaroni","noodles","linguine pasta","farfalle"],
+  "noodles":["noodles","rice noodles","egg noodles","udon noodles"]
+};
+var UNIVERSE = [];
+(() => {
+  var seen = {};
+  RECIPES.forEach((r) => { r.ings.forEach((i) => {
+    var n = norm(i.n); if (!seen[n]) { seen[n]=1; UNIVERSE.push(n); }
+  });});
+})();
+
+function resolve(item){
+  var n = norm(item);
+  var cands = [n];
+  [ALIASES[n], REV_ALIASES[n]].forEach((a) => { if (a && cands.indexOf(a)<0) cands.push(a); });
+  for (var c=0;c<cands.length;c++){
+    var x = cands[c];
+    if (FAMILY[x]) return FAMILY[x];
+    var hit = null;
+    for (var i=0;i<UNIVERSE.length;i++) if (UNIVERSE[i]===x) { hit=x; break; }
+    if (!hit) {
+      var p = UNIVERSE.filter((u) => { return u.startsWith(x); }).sort((a,b) => {return a.length-b.length;});
+      if (p.length) hit = p[0];
+    }
+    if (!hit) {
+      var q = UNIVERSE.filter((u) => { return x.startsWith(u); }).sort((a,b) => {return b.length-a.length;});
+      if (q.length) hit = q[0];
+    }
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function matchAll(myNorms){
+  var out = [];
+  for (var i=0;i<RECIPES.length;i++){
+    var r = RECIPES[i];
+    var theirNorms = r.ings.map((x) => {return norm(x.n);});
+    var have = theirNorms.filter((t) => {
+      for (var j=0;j<myNorms.length;j++){
+        var m = myNorms[j];
+        if (t===m || t.indexOf(m)>=0 || m.indexOf(t)>=0) return true;
+      }
+      return false;
+    });
+    if (!have.length) continue;
+    var uniqueHave = [];
+    var haveSet = {};
+    have.forEach((h) => { if(!haveSet[h]){haveSet[h]=1;uniqueHave.push(h);} });
+    var score = 0;
+    uniqueHave.forEach((h) => {
+      var w = 1;
+      if (PERISHABLE.has(h)) w = 2;
+      else {
+        for (var pi=0; pi<PERISHABLE_ARR.length; pi++){
+          var pp = PERISHABLE_ARR[pi];
+          if (h.indexOf(pp)>=0 || pp.indexOf(h)>=0){ w=2; break; }
+        }
+      }
+      score += w;
+    });
+    var missing = r.ings.filter((x) => { return !haveSet[norm(x.n)]; }).map((x) => {return x.n;}).slice(0,5);
+    out.push({ r:r, have:uniqueHave.length, total:r.ings.length, missing:missing, score:score });
+  }
+  out.sort((a,b) => {
+    if (b.score!==a.score) return b.score-a.score;
+    return (b.have/b.total) - (a.have/a.total);
+  });
+  return out.slice(0,6);
+}
+
+/* ============ ui ============ */
+var CAT_EMOJI = { Chicken:"🍗", Beef:"🥩", Pork:"🥓", Lamb:"🍖", Seafood:"🦐", Vegetarian:"🥦", Vegan:"🥗", Pasta:"🍝", Dessert:"🍰", Breakfast:"🍳", Side:"🥔", Starter:"🥣", Miscellaneous:"🍲" };
+var $ = (id) => { return document.getElementById(id); };
+var items = []; // raw strings the user entered
+
+function addChip(text){
+  var v = text.trim().replace(/,$/,"");
+  if (!v) return;
+  if (items.indexOf(v) < 0) items.push(v);
+  renderChips(); run();
+}
+function removeChip(text){
+  items = items.filter((x) => { return x!==text; });
+  renderChips(); run();
+}
+function renderChips(){
+  $("chips").innerHTML = items.map((it, i) => {
+    return '<span class="chip">'+escapeHtml(it)+'<button data-idx="'+i+'" aria-label="remove">✕</button></span>';
+  }).join("");
+}
+function escapeHtml(s){
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function run(){
+  var resolved = [];
+  var unresolved = [];
+  items.forEach((it) => {
+    var r = resolve(it);
+    if (r) resolved = resolved.concat(r); else unresolved.push(it);
+  });
+  // bug #1 fix, ported: only normalize/resolve what actually resolved
+  var myNorms = [];
+  resolved.forEach((c) => { var n = norm(c); if (myNorms.indexOf(n)<0) myNorms.push(n); });
+
+  var box = $("results"), empty = $("empty");
+  box.innerHTML = "";
+
+  if (!resolved.length){
+    box.style.display = "none";
+    empty.style.display = "block";
+    $("emptyText").textContent = unresolved.length
+      ? 'no recipe for "' + unresolved.slice(0,3).join(", ") + '" yet. try staples:'
+      : "nothing in the fridge, nothing on the plate. try staples:";
+    $("suggest").innerHTML = ["eggs","rice","chicken","onion","tomato","pasta","cheese","potato"].map((s) => {
+      return '<button data-chip="'+s+'">'+s+'</button>';
+    }).join("");
+    return;
+  }
+
+  var results = matchAll(myNorms);
+  if (!results.length){
+    box.style.display = "none";
+    empty.style.display = "block";
+    $("emptyText").textContent = "i know 36 recipes but none of them use that. try staples:";
+    $("suggest").innerHTML = ["eggs","rice","chicken","onion","tomato","pasta","cheese","potato"].map((s) => {
+      return '<button data-chip="'+s+'">'+s+'</button>';
+    }).join("");
+    return;
+  }
+
+  box.style.display = "flex";
+  empty.style.display = "none";
+  results.forEach((res) => {
+    var badge = res.missing.length<=2
+      ? '<span class="badge">COOK NOW</span>'
+      : (res.missing.length<=4 ? '<span class="badge near">ALMOST</span>' : "");
+    box.innerHTML +=
+      '<div class="card" data-id="'+res.r.id+'">'+
+        '<div class="top"><span class="emoji">'+(CAT_EMOJI[res.r.cat]||"🍲")+'</span>'+
+        '<span class="name">'+escapeHtml(res.r.name)+'</span>'+badge+'</div>'+
+        '<div class="have">you have <b>'+res.have+' of '+res.total+'</b> ingredients</div>'+
+        (res.missing.length ? '<div class="missing">missing: '+escapeHtml(res.missing.join(", "))+'</div>' : '')+
+      '</div>';
+  });
+}
+
+var currentRecipe = null;
+function openDetail(id){
+  for (var i=0;i<RECIPES.length;i++) if (RECIPES[i].id===id){ currentRecipe = RECIPES[i]; break; }
+  if (!currentRecipe) return;
+  $("listView").style.display = "none";
+  $("detailView").style.display = "block";
+  $("dEmoji").textContent = CAT_EMOJI[currentRecipe.cat]||"🍲";
+  $("dName").textContent = currentRecipe.name;
+  $("dMeta").textContent = (currentRecipe.cat||"") + (currentRecipe.area ? " · "+currentRecipe.area : "");
+  var myNorms = [];
+  items.forEach((it) => { var rs = [].concat(resolve(it)||[]); rs.forEach((c) => { var n=norm(c); if(myNorms.indexOf(n)<0)myNorms.push(n); }); });
+  var theirNorms = currentRecipe.ings.map((x) => {return norm(x.n);});
+  var haveSet = {};
+  theirNorms.forEach((t) => {
+    for (var j=0;j<myNorms.length;j++){
+      var m = myNorms[j];
+      if (t===m || t.indexOf(m)>=0 || m.indexOf(t)>=0){ haveSet[t]=1; break; }
+    }
+  });
+  var haveCount = currentRecipe.ings.filter((x) => {return haveSet[norm(x.n)];}).length;
+  $("dScore").innerHTML = 'you have <b>'+haveCount+' of '+currentRecipe.ings.length+'</b>'+
+    (haveCount<currentRecipe.ings.length ? ' · <span class="miss">'+ (currentRecipe.ings.length-haveCount)+' to shop or swap</span>' : ' · everything you need 🎉');
+  $("dIings").innerHTML = currentRecipe.ings.map((ing, i) => {
+    var on = haveSet[norm(ing.n)] ? " checked" : "";
+    return '<li class="'+(on?"":"off")+'"><input type="checkbox" data-ii="'+i+'"'+on+'>'+
+      '<span class="iname">'+escapeHtml(ing.n)+'</span><span class="qty">'+escapeHtml(ing.m)+'</span></li>';
+  }).join("");
+  $("dSteps").innerHTML = currentRecipe.steps.split("\n").filter((s) => {return s.trim();}).map((s) => {
+    return "<li>"+escapeHtml(s.trim())+"</li>";
+  }).join("");
+  window.scrollTo(0,0);
+}
+function toggleIng(cb){
+  var li = cb.parentNode;
+  li.className = cb.checked ? "" : "off";
+  var n = norm(li.querySelector(".iname").textContent);
+  // recount score line
+  var boxes = $("dIings").querySelectorAll("input");
+  var on = 0; for (var i=0;i<boxes.length;i++) if (boxes[i].checked) on++;
+  $("dScore").innerHTML = 'you have <b>'+on+' of '+currentRecipe.ings.length+'</b>'+
+    (on<currentRecipe.ings.length ? ' · <span class="miss">'+(currentRecipe.ings.length-on)+' to shop or swap</span>' : ' · everything you need 🎉');
+}
+function closeDetail(){
+  $("detailView").style.display = "none";
+  $("listView").style.display = "block";
+}
+
+// ingredient checkbox toggles (delegated)
+var DETAIL = document.getElementById("dIings");
+DETAIL.addEventListener("change", (e) => {
+  if (e.target && e.target.getAttribute && e.target.getAttribute("data-ii") !== null){
+    toggleIng(e.target);
+  }
+});
+
+// delegation: one listener for chips, suggest buttons, cards
+var VIEW = document.getElementById("listView");
+VIEW.addEventListener("click", (e) => {
+  var t = e.target;
+  var chipBtn = t.closest ? t.closest("[data-idx]") : null;
+  if (chipBtn){ removeChip(items[+chipBtn.getAttribute("data-idx")]); return; }
+  var sug = t.closest ? t.closest("[data-chip]") : null;
+  if (sug){ addChip(sug.getAttribute("data-chip")); return; }
+  var card = t.closest ? t.closest("[data-id]") : null;
+  if (card){ openDetail(card.getAttribute("data-id")); return; }
+});
+
+$("go").addEventListener("click", () => {
+  var v = $("input").value;
+  if (!v.trim()) return;
+  $("input").value = "";
+  v.split(",").forEach(addChip);
+});
+$("input").addEventListener("keydown", (e) => {
+  if (e.key==="Enter" || e.key===","){ e.preventDefault(); var v=this.value; if(v.trim()){ this.value=""; v.split(",").forEach(addChip);} }
+});
+$("back").addEventListener("click", closeDetail);
+
+// demo starter so the screen isn't dead on open
+addChip("chicken"); addChip("eggs"); addChip("rice"); addChip("onion");
+</script>
+</body>
+</html>
